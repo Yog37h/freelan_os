@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FreelancerOS
+
+A full-stack SaaS platform for freelancers to manage projects, clients, timelines, payments, approvals, and WhatsApp communication — all from a single dashboard.
+
+## Tech Stack
+
+| Layer        | Technology                                                        |
+| ------------ | ----------------------------------------------------------------- |
+| **Frontend** | Vite 8, React 19, TanStack Router, Tailwind CSS v4, Zustand, Framer Motion |
+| **Backend**  | Hono v4 on Node.js, JWT Auth, Zod, Google OAuth                  |
+| **Database** | Drizzle ORM → Neon Postgres                                      |
+| **AI**       | OpenRouter (timeline generation)                                  |
+| **Messaging**| AiSensy WhatsApp API                                             |
+| **Monorepo** | pnpm workspaces + Turborepo                                      |
+
+## Prerequisites
+
+- **Node.js** ≥ 18
+- **pnpm** ≥ 10
 
 ## Getting Started
 
-First, run the development server:
+1. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+2. **Configure environment**
+   Copy `.env.example` to `.env.local` and fill in your credentials:
+   - `DATABASE_URL` — Neon Postgres connection string
+   - `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` — JWT signing keys (min 32 chars each, must differ)
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth
+   - `FRONTEND_URL` — Frontend origin (e.g., `http://localhost:5173`)
+   - `VITE_API_URL` — Backend API origin (e.g., `http://localhost:3000`)
+
+3. **Run database migrations**
+   ```bash
+   pnpm db:migrate
+   ```
+
+4. **Start development servers**
+   ```bash
+   pnpm dev
+   ```
+   This starts both the frontend (`:5173`) and backend (`:3000`) in parallel via Turborepo.
+
+## Project Structure
+
+```
+freelanapp/
+├── frontend/           # Vite + React 19 SPA
+├── backend/            # Hono API server
+├── packages/
+│   ├── db/             # Drizzle ORM schema & migrations
+│   ├── types/          # Shared TypeScript types
+│   └── validators/     # Shared Zod validators
+├── scripts/            # Utility scripts
+├── docs/               # Smoke test documentation
+├── turbo.json          # Turborepo pipeline config
+└── pnpm-workspace.yaml # Workspace definition
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command             | Description                                |
+| ------------------- | ------------------------------------------ |
+| `pnpm dev`          | Start all dev servers in parallel          |
+| `pnpm build`        | Type-check and build all packages          |
+| `pnpm lint`         | Run ESLint across all workspaces           |
+| `pnpm typecheck`    | Run `tsc --noEmit` across all workspaces   |
+| `pnpm db:generate`  | Generate Drizzle migration files           |
+| `pnpm db:migrate`   | Apply database migrations                  |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## License
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Private — All rights reserved.

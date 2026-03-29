@@ -1,26 +1,18 @@
 {
-  "name": "freelanapp",
-  "version": "0.1.0",
+  "name": "freelancer-os",
   "private": true,
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "build": "pnpm turbo run build",
+    "dev": "pnpm turbo run dev",
+    "lint": "pnpm turbo run lint",
+    "typecheck": "pnpm turbo run typecheck",
+    "db:generate": "pnpm --filter @freelancer-os/db db:generate",
+    "db:migrate": "pnpm --filter @freelancer-os/db db:migrate",
+    "format": "prettier --write \"**/*.{ts,tsx,md,css,json}\""
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "turbo": "^2.0.0",
+    "prettier": "^3.0.0"
   }
 }

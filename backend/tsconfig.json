@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@freelancer-os/db": ["../packages/db/src/index.ts"],
+      "@freelancer-os/types": ["../packages/types/src/index.ts"],
+      "@freelancer-os/validators": ["../packages/validators/src/index.ts"],
+      "drizzle-orm": ["../packages/db/node_modules/drizzle-orm"],
+      "drizzle-orm/*": ["../packages/db/node_modules/drizzle-orm/*"]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["node", "jsonwebtoken", "cookie-parser", "bcryptjs"]
+  },
+  "include": ["src/**/*"]
+}

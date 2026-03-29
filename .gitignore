@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -19,16 +20,25 @@
 
 # production
 /build
+**/dist
+**/.turbo
+.turbo/
+.corepack/
 
 # misc
 .DS_Store
 *.pem
+.qodo/
+.zencoder/
+.zenflow/
+.tunnel-url
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
 # env files (can opt-in for committing if needed)
 .env*

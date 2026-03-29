@@ -1,0 +1,271 @@
+# WhatsApp Integration Analysis — FreelanceOS × AiSensy
+
+## 1. Project Architecture (Current State)
+
+FreelanceOS is a **Next.js 16 + Supabase** freelance project management app with:
+
+| Layer | Location | Details |
+|-------|----------|---------|
+| **Pages** | `app/(dashboard)/` | Dashboard, Projects, Timeline, Client Updates, Payments, Approvals, Settings, Profile |
+| **API Routes** | `app/api/` | Auth, Projects (overview/timeline/updates/scope/closure/files), Payments, Profile |
+| **Backend Services** | `src/backend/services/` | Guards, ProjectOverview, Timeline, Updates, Scope, Closure, Files, Profile, PlanService |
+| **DB Layer** | `src/backend/db/` + `lib/db/` | Supabase queries for projects, clients, updates, timeline, payments, etc. |
+| **Validators** | `src/backend/validators/` | Zod schemas for all input validation |
+| **Frontend API** | `src/frontend/lib/` | Client-side API helpers |
+| **Types** | `types/index.ts` | Full TypeScript type definitions |
+
+### Key Tables (Supabase)
+- **`projects`** — title, description, status, cost, dates, client_id, owner_id
+- **`clients`** — name, business_name, email, **`whatsapp`** ✅ (already has phone field!)
+- **`updates`** — project_id, type, summary, channel, sent_at, owner_id
+- **`timeline_tasks`** — milestones/tasks for project timelines
+
+### Existing Messaging Scaffolding ✅
+
+Your app already has significant groundwork laid:
+
+1. **Client Update Center** (`/client-updates`) — Full UI with:
+   - Project list sidebar with "Active Channels"
+   - Update history timeline with WhatsApp/Email channel icons
+   - Communication templates (Weekly Progress, Deliverable Shared, Approval Request)
+   - **"Send Update Now"** button (currently no-op)
+   - **"Live Send"** per template (currently no-op)
+   - **Auto-Send toggle** (UI-only, not wired)
+
+2. **Updates API** (`/api/projects/[projectId]/updates`) — POST creates update records with `channel: 'WhatsApp' | 'Email'`
+
+3. **Client `whatsapp` field** — Already stored per client
+
+4. **PaymentRequest type** — Has `channel: 'whatsapp'` field
+
+> [!IMPORTANT]
+> The entire messaging UI is built but nothing actually sends messages. AiSensy integration will **wire up** all these existing buttons and flows.
+
+---
+
+## 2. AiSensy API — How It Works
+
+### Core Concept
+AiSensy uses **pre-approved WhatsApp Template Messages** sent via **API Campaigns**. You don't send free-form text — you trigger named campaigns with dynamic parameters.
+
+### Send Message Endpoint
+
+```
+POST https://backend.aisensy.com/campaign/t1/api/v2
+```
+
+**Request Body:**
+```json
+{
+  "apiKey": "your-api-key",
+  "campaignName": "your_campaign_name",
+  "destination": "+917428526285",
+  "userName": "Client Name",
+  "source": "FreelanceOS",
+  "media": {
+    "url": "https://public-url.com/file.pdf",
+    "filename": "deliverable.pdf"
+  },
+  "templateParams": ["param1", "param2"],
+  "tags": ["freelanceos"],
+  "attributes": {
+    "project_name": "Website Redesign"
+  }
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `apiKey` | ✅ | From AiSensy Dashboard → Manage → API Key |
+| `campaignName` | ✅ | Name of a **Live** API campaign (must match exactly) |
+| `destination` | ✅ | Phone with country code: `+91XXXXXXXXXX` |
+| `userName` | ✅ | Display name of recipient |
+| `source` | ❌ | Lead source for segmentation |
+| `media` | ❌ | Public URL for media-based templates |
+| `templateParams` | ❌ | Array of dynamic values matching template placeholders |
+| `tags` | ❌ | Tags to assign/segment contacts |
+| `attributes` | ❌ | Custom contact attributes |
+
+**Response:** `200` on success.
+
+### Webhook Topics (Real-time events)
+
+Set up webhook subscriptions in AiSensy to receive:
+
+| Topic | Trigger |
+|-------|---------|
+| `message.created` | New message sent by assistant, agent, user, or broadcast |
+| `message.status.updated` | Message status changes (sent → delivered → read) |
+| `message.sender.user` | **User replies** to your business on WhatsApp |
+| `contact.created` | New contact added |
+| `contact.attribute.revised` | Contact attributes updated |
+
+---
+
+## 3. What to Set Up in Your AiSensy Account
+
+### Step 1: Get Your API Key
+1. Log in to [AiSensy Dashboard](https://app.aisensy.com)
+2. Go to **Manage → API Key**
+3. Copy the API key
+4. Add to your `.env.local`:
+   ```
+   AISENSY_API_KEY=your_api_key_here
+   ```
+
+### Step 2: Create WhatsApp Message Templates
+
+You need **pre-approved templates** for each type of message. Create these in AiSensy:
+
+| Template Name | Use Case | Suggested Body | Parameters |
+|--------------|----------|----------------|------------|
+| `project_weekly_update` | Weekly progress | `Hi {{1}}! Here's your weekly update for {{2}}: {{3}}` | clientName, projectTitle, summary |
+| `deliverable_shared` | Sharing deliverables | `Hi {{1}}! A new deliverable for {{2}} is ready: {{3}}` | clientName, projectTitle, details |
+| `approval_request` | Requesting approval | `Hi {{1}}, we need your approval on {{2}} for {{3}}. Please review.` | clientName, milestone, projectTitle |
+| `payment_reminder` | Payment due | `Hi {{1}}, a payment of {{2}} {{3}} for {{4}} is due on {{5}}.` | clientName, amount, currency, projectTitle, dueDate |
+| `project_milestone_complete` | Milestone done | `Great news {{1}}! Milestone "{{2}}" for {{3}} is now complete.` | clientName, milestoneName, projectTitle |
+| `buffer_update` | Buffer/delay notification | `Hi {{1}}, an update on {{2}}: {{3}}` | clientName, projectTitle, details |
+
+> [!WARNING]
+> WhatsApp templates must be **submitted for approval** and can take 24-48 hours. Start this process first since the templates need to be approved before you can create API campaigns.
+
+### Step 3: Create API Campaigns
+
+For **each approved template**, create an API Campaign:
+
+1. Go to **Campaigns** in AiSensy
+2. Click **Create Campaign** → Select **API Campaign**
+3. **Campaign Name** — use a clear name matching the template (e.g., `project_weekly_update`)
+4. **Select Template** — pick the approved template
+5. **Set campaign status to "Live"**
+
+> [!IMPORTANT]
+> The `campaignName` in your API call must **exactly match** the campaign name you create here.
+
+### Step 4: Set Up Webhooks (for delivery tracking & client replies)
+
+1. In AiSensy Dashboard, go to **Settings → Webhooks**
+2. **Webhook URL**: Use ngrok for development:
+   ```bash
+   ngrok http 3000
+   ```
+   Your webhook URL will be: `https://your-ngrok-subdomain.ngrok-free.app/api/webhooks/aisensy`
+3. **Subscribe to topics:**
+   - ✅ `message.status.updated` — Track delivery (sent → delivered → read)
+   - ✅ `message.sender.user` — Receive client replies
+   - ✅ `message.created` — Track all messages
+
+### Step 5: Create Contact Attributes (Optional but Recommended)
+
+In AiSensy Dashboard → **Manage → Attributes**, add:
+- `project_name` (string)
+- `freelancer_name` (string)
+- `project_status` (string)
+
+These help segment contacts within AiSensy.
+
+---
+
+## 4. What to Build in FreelanceOS
+
+### Phase 1 — Core Messaging (Wire up existing UI)
+
+| Item | Details |
+|------|---------|
+| **New env vars** | `AISENSY_API_KEY` in `.env.local` |
+| **New service** | `src/backend/services/whatsappService.ts` — wraps AiSensy API calls |
+| **New API route** | `app/api/whatsapp/send/route.ts` — endpoint to trigger messages |
+| **New API route** | `app/api/webhooks/aisensy/route.ts` — receive webhooks (no JWT) |
+| **DB migration** | Add `whatsapp_status` column to `updates` table (sent/delivered/read/failed) |
+| **Wire Update Panel** | Connect "Send Update Now" and "Live Send" buttons → call `/api/whatsapp/send` |
+| **Wire update history** | Show delivery status badges based on `whatsapp_status` |
+
+### Phase 2 — Delivery Tracking & Replies
+
+| Item | Details |
+|------|---------|
+| **Webhook handler** | Process `message.status.updated` → update `whatsapp_status` in DB |
+| **Client replies** | Process `message.sender.user` → store as incoming messages |
+| **New DB table** | `whatsapp_messages` — full message log with status tracking |
+| **Real-time UI** | Show delivery receipts (✓ sent, ✓✓ delivered, blue ✓✓ read) |
+
+### Phase 3 — Auto-Send & Payment Reminders
+
+| Item | Details |
+|------|---------|
+| **Auto-send logic** | Cron/scheduled function for weekly auto-updates |
+| **Payment reminders** | Wire payment due notifications to WhatsApp |
+| **Approval requests** | Send milestone approval requests via WhatsApp |
+
+---
+
+## 5. Environment Variables Summary
+
+Add these to `.env.local`:
+
+```env
+# AiSensy WhatsApp Integration
+AISENSY_API_KEY=your_aisensy_api_key
+AISENSY_API_URL=https://backend.aisensy.com/campaign/t1/api/v2
+
+# Webhook (for development with ngrok)  
+WEBHOOK_SECRET=a_random_secret_for_verification
+```
+
+---
+
+## 6. Prerequisites Checklist
+
+- [ ] **AiSensy account** with WhatsApp Business API verified
+- [ ] **API Key** copied from AiSensy Dashboard → Manage → API Key
+- [ ] **6 WhatsApp templates** created and submitted for approval (see table in Step 2)
+- [ ] **6 API Campaigns** created (one per template), all set to **Live**
+- [ ] **Webhook subscription** configured with ngrok URL
+- [ ] **ngrok** installed and running: `ngrok http 3000`
+- [ ] **Env vars** added to `.env.local`
+- [ ] **Contact attributes** created in AiSensy (optional)
+
+---
+
+## 7. Architecture Diagram
+
+```mermaid
+sequenceDiagram
+    participant FE as FreelanceOS UI
+    participant API as Next.js API Routes
+    participant WS as WhatsApp Service
+    participant AS as AiSensy API
+    participant WA as WhatsApp
+    participant CL as Client Phone
+
+    FE->>API: POST /api/whatsapp/send
+    API->>WS: sendTemplateMessage()
+    WS->>AS: POST /campaign/t1/api/v2
+    AS->>WA: Send Template Message
+    WA->>CL: WhatsApp Message Delivered
+    
+    Note over AS,API: Webhook: message.status.updated
+    AS-->>API: POST /api/webhooks/aisensy
+    API->>WS: updateMessageStatus()
+    
+    Note over CL,AS: Client replies
+    CL->>WA: Reply Message
+    WA->>AS: Incoming Message
+    AS-->>API: POST /api/webhooks/aisensy
+    API->>WS: storeIncomingMessage()
+```
+
+---
+
+## 8. Key Constraints & Notes
+
+> [!CAUTION]
+> - WhatsApp **only allows template messages** for business-initiated conversations. Free-form text is only possible within a 24-hour reply window.
+> - Template parameters array length must **exactly match** the number of placeholders in the template, or the API will reject the request.
+> - Media URLs in templates must be **publicly accessible**.
+> - The AiSensy API key should **never** be exposed client-side — all calls must go through your Next.js API routes.
+
+> [!NOTE]
+> - If a destination number doesn't exist in AiSensy contacts, a new contact is **automatically created**.
+> - For Indian numbers, `+91` prefix is optional. For all other countries, country code is mandatory.
+> - Tags and attributes must be pre-created in AiSensy before they can be used in API calls.
