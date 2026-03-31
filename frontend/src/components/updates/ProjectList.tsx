@@ -17,7 +17,7 @@ export function ProjectList({ items, selectedId, onSelect }: ProjectListProps) {
     return (
         <div className="space-y-3">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2 mb-4">Active Channels</h3>
-            {items.map((item) => (
+            {items.length > 0 ? items.map((item) => (
                 <button
                     key={item.updateId}
                     onClick={() => onSelect(item.updateId)}
@@ -41,7 +41,15 @@ export function ProjectList({ items, selectedId, onSelect }: ProjectListProps) {
                         <MessageSquare size={10} /> Last: {new Date(item.sentAt).toLocaleDateString()}
                     </p>
                 </button>
-            ))}
+            )) : (
+                <Card className="p-6 border border-dashed border-white/10 bg-card/20 text-center">
+                    <MessageSquare size={28} className="mx-auto mb-3 text-muted-foreground/30" />
+                    <p className="text-sm font-bold">No active channels yet</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        Create your first project to start client updates.
+                    </p>
+                </Card>
+            )}
         </div>
     );
 }

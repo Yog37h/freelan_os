@@ -6,19 +6,28 @@ import { Search, Bell, Plus, Settings, LogOut, CreditCard, User as UserIcon } fr
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
-import {
-    mockNotifications
-} from '@/mock/notifications';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/cn';
 import { api } from '@/lib/axios';
+import { getNotifications } from '@/lib/data';
+import { Notification } from '@/types';
 
 export function TopBar() {
     const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
     const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+    const [notifications, setNotifications] = React.useState<Notification[]>([]);
     const pathname = window.location.pathname;
 
     const { user, clearAuth } = useAuthStore();
+
+    React.useEffect(() => {
+        async function loadNotifications() {
+            const data = await getNotifications();
+            setNotifications(data);
+        }
+
+        loadNotifications();
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -50,6 +59,7 @@ export function TopBar() {
 
     const displayName = user?.name || user?.email?.split('@')[0] || 'User';
     const initials = displayName.charAt(0) || 'U';
+    const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
     return (
         <header className="h-20 border-b border-white/5 bg-background/50 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-40">
@@ -78,17 +88,32 @@ export function TopBar() {
                         onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
                     >
                         <Bell size={18} />
-                        <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-background animate-pulse" />
+                        {unreadCount > 0 && (
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-background animate-pulse" />
+                        )}
                     </Button>
 
                     {isNotificationsOpen && (
                         <div className="absolute right-0 mt-4 w-80 glass-panel rounded-2xl p-4 shadow-2xl z-50 animate-in fade-in zoom-in duration-200 border border-white/10">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="font-bold text-sm">Notifications</h3>
-                                <button className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline">Mark all read</button>
+                                <button
+                                    className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                                    onClick={() =>
+                                        setNotifications((current) =>
+                                            current.map((notification) => ({
+                                                ...notification,
+                                                isRead: true,
+                                            })),
+                                        )
+                                    }
+                                    disabled={notifications.length === 0}
+                                >
+                                    Mark all read
+                                </button>
                             </div>
                             <div className="space-y-4">
-                                {mockNotifications.map(notification => (
+                                {notifications.length > 0 ? notifications.map(notification => (
                                     <div key={notification.id} className="flex gap-3 items-start pb-3 border-b border-white/5 last:border-0">
                                         <div className={cn(
                                             "w-1.5 h-1.5 rounded-full mt-2 shrink-0",
@@ -99,7 +124,11 @@ export function TopBar() {
                                             <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{notification.description}</p>
                                         </div>
                                     </div>
-                                ))}
+                                )) : (
+                                    <div className="py-6 text-center text-xs text-muted-foreground">
+                                        No notifications yet.
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

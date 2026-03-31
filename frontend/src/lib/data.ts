@@ -1,21 +1,18 @@
-import { mockUser } from "../mock/user";
-import { mockProjects } from "../mock/projects";
-import { mockTodayTasks, mockTimelineTasks } from "../mock/tasks";
-import { mockNotifications } from "../mock/notifications";
-import { mockUpdates, mockUpdateCenterItems } from "../mock/updates";
-import { mockMilestones } from "../mock/milestones";
-import { mockFiles } from "../mock/files";
-import { mockScopes } from "../mock/scope";
-import { mockInvoices } from "../mock/invoices";
-import { mockFlags } from "../mock/flags";
-import { mockApprovals } from "../mock/approvals";
-import { mockPaymentSchedule } from "../mock/paymentSchedule";
-import { mockPaymentTransactions } from "../mock/paymentTransactions";
-import { mockPaymentRequests } from "../mock/paymentRequests";
-
 import { getLocalProjects, getLocalProjectById } from "./clientStore";
 import { api } from "./axios";
 import { getAllWhatsAppMessages } from "./whatsappApi";
+import { useAuthStore } from "../store/auth.store";
+import type {
+  ClientApprovalItem,
+  DashboardSummaryCard,
+  Invoice,
+  Notification,
+  PaymentScheduleItem,
+  ProjectUpdate,
+  TimelineTask,
+  UpdateCenterItem,
+  User,
+} from "@/types";
 
 async function getJson<T>(url: string) {
   const response = await api.get(url);
@@ -32,21 +29,41 @@ async function patchJson<T>(url: string, body?: unknown) {
   return response.data as T;
 }
 
-// Future-backend-ready functions
-export async function getUser() {
+function asArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function getFallbackUser() {
+  const authUser = useAuthStore.getState().user;
+  if (!authUser) {
+    return null;
+  }
+
+  return {
+    id: authUser.id,
+    name: authUser.name || authUser.email.split("@")[0] || "User",
+    avatar: authUser.avatar,
+    role: authUser.role || "freelancer",
+    plan: "FREE" as const,
+  };
+}
+
+export async function getUser(): Promise<User | null> {
   try {
     const result = await getJson<any>("/api/profile");
     const data = result.data;
-    if (!data) return mockUser;
+    const fallbackUser = getFallbackUser();
+    if (!data) return fallbackUser;
+
     return {
-      ...mockUser,
-      id: data.id,
-      name: data.full_name || mockUser.name,
-      avatar: data.avatar_url || mockUser.avatar,
-      role: data.headline || mockUser.role,
+      id: data.id || fallbackUser?.id || "",
+      name: data.full_name || fallbackUser?.name || "User",
+      avatar: data.avatar_url || fallbackUser?.avatar,
+      role: data.headline || fallbackUser?.role || "freelancer",
+      plan: "FREE" as const,
     };
   } catch {
-    return mockUser;
+    return getFallbackUser();
   }
 }
 
@@ -61,9 +78,10 @@ export async function getProjects(params?: { status?: string; q?: string }) {
       `/api/projects?${queryParams.toString()}`,
     );
 
-    if (!data || data.length === 0) return getLocalProjects();
+    const projects = asArray(data);
+    if (projects.length === 0) return getLocalProjects();
 
-    return data.map((p: any) => ({
+    return projects.map((p: any) => ({
       id: p.id,
       clientId: p.client_id,
       client: {
@@ -112,7 +130,7 @@ export async function getProjects(params?: { status?: string; q?: string }) {
     }));
   } catch (err) {
     console.error("getProjects error:", err);
-    return [...mockProjects, ...getLocalProjects()];
+    return getLocalProjects();
   }
 }
 
@@ -169,17 +187,16 @@ export async function getProjectById(projectId: string) {
         p.next_milestone_name || p.nextMilestoneName || "Project Deadline",
     };
   } catch (err) {
-    // Fallback to local or mock
     const local = getLocalProjectById(projectId);
     if (local) return local;
-    return mockProjects.find((p) => p.id === projectId) || null;
+    return null;
   }
 }
 
 export async function getProjectUpdates(projectId: string) {
   try {
     const { data } = await getJson<any>(`/api/projects/${projectId}/updates`);
-    return data.map((u: any) => ({
+    return asArray(data).map((u: any) => ({
       id: u.id,
       projectId: u.project_id,
       date: u.sent_at,
@@ -188,14 +205,14 @@ export async function getProjectUpdates(projectId: string) {
       channel: u.channel || "System",
     }));
   } catch {
-    return mockUpdates.filter((u) => u.projectId === projectId);
+    return [];
   }
 }
 
 export async function getProjectMilestones(projectId: string) {
   try {
     const { data } = await getJson<any>(`/api/projects/${projectId}/timeline`);
-    return data.milestones.map((m: any) => ({
+    return asArray(data?.milestones).map((m: any) => ({
       id: m.id,
       projectId: m.project_id,
       name: m.name,
@@ -204,14 +221,14 @@ export async function getProjectMilestones(projectId: string) {
       deliverablesCount: 0, // Fetch from tasks if needed
     }));
   } catch {
-    return mockMilestones.filter((m) => m.projectId === projectId);
+    return [];
   }
 }
 
 export async function getProjectTimelineTasks(projectId: string) {
   try {
     const { data } = await getJson<any>(`/api/projects/${projectId}/timeline`);
-    return data.tasks.map((t: any) => ({
+    return asArray(data?.tasks).map((t: any) => ({
       taskId: t.id,
       projectId: t.project_id,
       milestoneId: t.milestone_id,
@@ -230,7 +247,7 @@ export async function getProjectTimelineTasks(projectId: string) {
 export async function getProjectFiles(projectId: string) {
   try {
     const { data } = await getJson<any>(`/api/projects/${projectId}/files`);
-    return data.map((f: any) => ({
+    return asArray(data).map((f: any) => ({
       id: f.id,
       projectId: f.project_id,
       name: f.name,
@@ -239,7 +256,7 @@ export async function getProjectFiles(projectId: string) {
       uploadedAt: f.uploaded_at,
     }));
   } catch {
-    return mockFiles.filter((f) => f.projectId === projectId);
+    return [];
   }
 }
 
@@ -258,8 +275,7 @@ export async function getProjectScope(projectId: string) {
         .map((s: any) => ({ id: s.id, label: s.label, note: s.note })),
     };
   } catch {
-    const scope = (mockScopes as any)[projectId];
-    return scope || { inScope: [], outOfScope: [], changes: [] };
+    return { inScope: [], outOfScope: [], changes: [] };
   }
 }
 
@@ -299,7 +315,7 @@ export async function getPaymentSchedule(projectId?: string) {
       status: p.status,
     }));
   } catch {
-    return mockPaymentSchedule;
+    return [];
   }
 }
 
@@ -336,31 +352,30 @@ export async function addProjectFile(projectId: string, file: any) {
   return postJson(`/api/projects/${projectId}/files`, file);
 }
 
-export async function getProjectInvoices(projectId: string) {
-  // For now, mapping to payments or keeping mock
-  return mockInvoices.filter((i) => i.projectId === projectId);
+export async function getProjectInvoices(projectId: string): Promise<Invoice[]> {
+  void projectId;
+  return [];
 }
 
-export async function getTodayTasks() {
+export async function getTodayTasks(): Promise<DashboardSummaryCard[]> {
   return getDashboardSummary();
 }
 
-export async function getDashboardSummary() {
+export async function getDashboardSummary(): Promise<DashboardSummaryCard[]> {
   try {
     const { data } = await getJson<any>("/api/dashboard/summary");
-    return data || mockTodayTasks;
+    return asArray<DashboardSummaryCard>(data);
   } catch {
-    return mockTodayTasks;
+    return [];
   }
 }
 
-export async function getNotifications() {
-  return mockNotifications;
+export async function getNotifications(): Promise<Notification[]> {
+  return [];
 }
 
-export async function getAllTasks() {
-  // This could call a general tasks endpoint
-  return mockTimelineTasks;
+export async function getAllTasks(): Promise<TimelineTask[]> {
+  return [];
 }
 
 export async function getTasksByDate(dateStr: string) {
@@ -382,7 +397,7 @@ export async function getTasksGroupedByDate() {
   return grouped;
 }
 
-export async function getUpdateCenterItems() {
+export async function getUpdateCenterItems(): Promise<UpdateCenterItem[]> {
   try {
     const [projects, waMessages] = await Promise.all([
       getProjects(),
@@ -390,7 +405,7 @@ export async function getUpdateCenterItems() {
     ]);
 
     if (!projects.length) {
-      return mockUpdateCenterItems;
+      return [];
     }
 
     const latestByProject = new Map<
@@ -442,22 +457,24 @@ export async function getUpdateCenterItems() {
       }
     });
 
-    return projects.map((project: any) => {
+    return projects.map((project: any): UpdateCenterItem => {
       const latestMessage = latestByProject.get(project.id);
       const messageType = latestMessage?.kind;
+      const type: UpdateCenterItem["type"] =
+        messageType === "deliverable"
+          ? "deliverable"
+          : messageType === "buffer_request" || messageType === "whatsapp"
+            ? "buffer"
+            : messageType === "approval_request" || messageType === "system"
+              ? "approval"
+              : "weekly";
+
       return {
         updateId: project.id,
         projectId: project.id,
         clientName: project.client?.name || "Client",
         projectTitle: project.projectTitle,
-        type:
-          messageType === "deliverable"
-            ? "deliverable"
-            : messageType === "buffer_request" || messageType === "whatsapp"
-              ? "buffer"
-              : messageType === "approval_request" || messageType === "system"
-                ? "approval"
-                : "weekly",
+        type,
         contentPreview:
           latestMessage?.content ||
           project.projectDescription ||
@@ -470,16 +487,16 @@ export async function getUpdateCenterItems() {
       };
     });
   } catch {
-    return mockUpdateCenterItems;
+    return [];
   }
 }
 
 export async function getPendingApprovals() {
   try {
     const { data } = await getJson<any>("/api/approvals");
-    return data || mockApprovals;
+    return asArray<ClientApprovalItem>(data);
   } catch {
-    return mockApprovals;
+    return [];
   }
 }
 
